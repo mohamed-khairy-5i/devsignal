@@ -9,6 +9,7 @@ import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useTheme } from "@/contexts/ThemeContext";
+import { extractHandle, isValidGitHubHandle, safeUrl } from "@/lib/profile-input";
 import {
   ArrowUpRight,
   Check,
@@ -96,30 +97,29 @@ function isTemplate(value: string | null): value is Template {
   return value === "editorial" || value === "terminal" || value === "paper";
 }
 
-function extractHandle(value: string) {
-  const trimmed = value.trim().replace(/^@/, "");
-  const githubUrl = trimmed.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/?#]+)/i);
-  return (githubUrl?.[1] ?? trimmed).replace(/\/$/, "");
-}
-
-function safeUrl(value: string) {
-  const candidate = value.trim();
-  if (!candidate) return "";
-  const withProtocol = /^https?:\/\//i.test(candidate) ? candidate : `https://${candidate}`;
-  try {
-    const parsed = new URL(withProtocol);
-    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : "";
-  } catch {
-    return "";
-  }
-}
-
 function formatCount(value: number) {
   return new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(value);
 }
 
 function formatSince(createdAt: string) {
   return new Intl.DateTimeFormat("en", { month: "short", year: "numeric" }).format(new Date(createdAt));
+}
+
+function rejectAfter(milliseconds: number, message: string) {
+  return new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(message)), milliseconds));
+}
+
+async function downloadCanvas(canvas: HTMLCanvasElement, fileName: string) {
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
+  if (!blob) throw new Error("The card image could not be prepared for download.");
+  const objectUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = objectUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -192,7 +192,7 @@ export default function Home() {
 
   async function loadProfile(rawValue = input) {
     const handle = extractHandle(rawValue);
-    if (!handle || !/^[a-z\d](?:[a-z\d-]{0,37}[a-z\d])?$/i.test(handle)) {
+    if (!handle || !isValidGitHubHandle(handle)) {
       setStatus("error");
       setError("Use a GitHub handle or a complete github.com profile URL.");
       return;
@@ -298,7 +298,21 @@ export default function Home() {
 
   async function buildCanvas() {
     if (!cardRef.current) throw new Error("Load a profile before exporting the card.");
-    return html2canvas(cardRef.current, { backgroundColor: theme === "dark" ? "#1a1d1a" : "#f1eadc", scale: 2, useCORS: true, logging: false, windowWidth: cardRef.current.scrollWidth });
+    const target = cardRef.current;
+    const bounds = target.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) throw new Error("The card is not ready to export yet. Try again in a moment.");
+    return Promise.race([
+      html2canvas(target, {
+        backgroundColor: theme === "dark" ? "#1a1d1a" : "#f1eadc",
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        imageTimeout: 10000,
+        logging: false,
+        removeContainer: true,
+      }),
+      rejectAfter(15000, "Export timed out while preparing the card. Try again after the profile images finish loading."),
+    ]);
   }
 
   async function exportCard(format: "png" | "pdf") {
@@ -311,10 +325,7 @@ export default function Home() {
       const canvas = await buildCanvas();
       const fileName = `${profile.login}-devcard`;
       if (format === "png") {
-        const link = document.createElement("a");
-        link.download = `${fileName}.png`;
-        link.href = canvas.toDataURL("image/png", 1);
-        link.click();
+        await downloadCanvas(canvas, `${fileName}.png`);
       } else {
         const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [canvas.width, canvas.height], compress: true });
         pdf.addImage(canvas.toDataURL("image/png", 0.95), "PNG", 0, 0, canvas.width, canvas.height, undefined, "FAST");
@@ -376,7 +387,7 @@ export default function Home() {
             <div className="relative border border-dashed border-[var(--line-strong)] p-2 sm:p-4"><span className="absolute -left-1 -top-6 font-mono text-[9px] text-[var(--muted-ink)]">X: 00</span><span className="absolute -bottom-6 right-0 font-mono text-[9px] text-[var(--muted-ink)]">Y: 800</span>
               {status === "loading" && <LoadingOverlay stage={loadingStage} />}
               {status === "error" && <div className="absolute inset-2 z-20 grid place-items-center bg-[var(--base)]/95 p-6 text-center"><div><X className="mx-auto h-6 w-6 text-[var(--signal)]" /><p className="mt-3 font-display text-xl font-bold text-[var(--ink)]">Profile signal interrupted.</p><p className="mx-auto mt-2 max-w-md text-sm leading-6 text-[var(--muted-ink)]">{error}</p><Button onClick={() => void loadProfile()} className="mt-5 rounded-none bg-[var(--signal)] font-mono text-xs uppercase tracking-wider text-[var(--base)] hover:brightness-110">Try the profile again</Button></div></div>}
-              {profile ? <article ref={cardRef} className={`profile-card profile-card--${template} relative min-h-[520px] overflow-hidden bg-[var(--card)] p-5 sm:min-h-[560px] sm:p-8`} style={cardStyle}><div className="absolute inset-0 opacity-35" style={{ backgroundImage: template === "paper" ? "repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(55, 48, 40, .07) 28px)" : "radial-gradient(circle at 86% 14%, color-mix(in srgb, var(--signal) 28%, transparent), transparent 30%), linear-gradient(135deg, transparent 68%, rgba(255,255,255,.06) 68% 69%, transparent 69%)" }} /><div className="absolute inset-y-0 left-0 w-[7px] bg-[var(--signal)]" /><div className="relative flex h-full min-h-[480px] flex-col"><div className="flex items-start justify-between gap-5"><div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--muted-ink)]"><Terminal className="h-4 w-4" /> Dev identity / {currentTemplate.title}</div><span className="border border-[var(--signal)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--signal)]">Live profile</span></div><div className="mt-10 flex flex-col gap-7 sm:flex-row sm:items-start sm:justify-between"><div className="max-w-2xl"><p className="font-mono text-xs text-[var(--signal)]">@{profile.login}</p><h2 className="mt-2 max-w-xl font-display text-4xl font-extrabold leading-[.93] tracking-[-0.055em] text-[var(--ink)] sm:text-6xl">{profile.name || profile.login}</h2><p className="mt-5 max-w-lg text-sm leading-6 text-[var(--body-ink)] sm:text-base">{profile.bio || "A developer profile, composed from public GitHub work."}</p></div><img src={profile.avatar_url} crossOrigin="anonymous" alt={`${profile.login} profile avatar`} className="h-24 w-24 border border-[var(--line-strong)] object-cover sm:h-32 sm:w-32" /></div><div className="mt-auto pt-10"><div className="flex flex-wrap gap-x-7 gap-y-3 border-y border-[var(--line)] py-5">{profile.location && <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted-ink)]">Based / <span className="text-[var(--ink)]">{profile.location}</span></span>}<span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted-ink)]">Building since / <span className="text-[var(--ink)]">{formatSince(profile.created_at)}</span></span>{profile.company && <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted-ink)]">At / <span className="text-[var(--ink)]">{profile.company.replace(/^@/, "")}</span></span>}</div>{showStats && <div className="mt-7 grid grid-cols-3 gap-4 sm:max-w-xl"><Stat label="Public repos" value={formatCount(profile.public_repos)} /><Stat label="Followers" value={formatCount(profile.followers)} /><Stat label="Stars found" value={formatCount(profile.stars)} /></div>}<div className="mt-8 flex flex-wrap items-center gap-2">{profile.languages.length > 0 ? profile.languages.map((language, index) => <span key={language} className="border border-[var(--line)] bg-black/10 px-2 py-1 font-mono text-[10px] text-[var(--body-ink)]" style={index === 0 ? { borderColor: cssAccent } : undefined}>{language}</span>) : <span className="font-mono text-[10px] text-[var(--muted-ink)]">Languages appear as repositories are made public.</span>}</div>{socialLinks.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{socialLinks.map((social) => { const Icon = social.icon; return <a key={social.id} href={social.value} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 border border-[var(--line)] px-2 py-1 font-mono text-[10px] text-[var(--ink)] transition-colors hover:border-[var(--signal)] hover:text-[var(--signal)]"><Icon className="h-3 w-3" /> {social.label}<ExternalLink className="h-2.5 w-2.5" /></a>; })}</div>}</div></div></article> : <div className="grid min-h-[520px] place-items-center bg-[var(--card)] p-8 text-center"><div><Sparkles className="mx-auto h-7 w-7 text-[var(--signal)]" /><h2 className="mt-4 font-display text-3xl font-bold text-[var(--ink)]">Your card is waiting.</h2><p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted-ink)]">Bring in a public GitHub profile to turn its work into an editable calling card.</p></div></div>}</div>
+              {profile ? <article ref={cardRef} className={`profile-card profile-card--${template} relative min-h-[520px] overflow-hidden bg-[var(--card)] p-5 sm:min-h-[560px] sm:p-8`} style={cardStyle}><div className="absolute inset-0 opacity-35" style={{ backgroundImage: template === "paper" ? "repeating-linear-gradient(0deg, transparent, transparent 27px, rgba(55, 48, 40, .07) 28px)" : "radial-gradient(circle at 86% 14%, color-mix(in srgb, var(--signal) 28%, transparent), transparent 30%), linear-gradient(135deg, transparent 68%, rgba(255,255,255,.06) 68% 69%, transparent 69%)" }} /><div className="absolute inset-y-0 left-0 w-[7px] bg-[var(--signal)]" /><div className="relative flex h-full min-h-[480px] flex-col"><div className="flex items-start justify-between gap-5"><div className="flex items-center gap-3 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--muted-ink)]"><Terminal className="h-4 w-4" /> Dev identity / {currentTemplate.title}</div><span className="border border-[var(--signal)] px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-[var(--signal)]">Live profile</span></div><div className="mt-10 flex flex-col gap-7 sm:flex-row sm:items-start sm:justify-between"><div className="max-w-2xl"><p className="font-mono text-xs text-[var(--signal)]">@{profile.login}</p><h2 className="mt-2 max-w-xl font-display text-4xl font-extrabold leading-[.93] tracking-[-0.055em] text-[var(--ink)] sm:text-6xl">{profile.name || profile.login}</h2><p className="mt-5 max-w-lg text-sm leading-6 text-[var(--body-ink)] sm:text-base">{profile.bio || "A developer profile, composed from public GitHub work."}</p></div><img src={profile.avatar_url} crossOrigin="anonymous" referrerPolicy="no-referrer" alt={`${profile.login} profile avatar`} className="h-24 w-24 border border-[var(--line-strong)] object-cover sm:h-32 sm:w-32" /></div><div className="mt-auto pt-10"><div className="flex flex-wrap gap-x-7 gap-y-3 border-y border-[var(--line)] py-5">{profile.location && <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted-ink)]">Based / <span className="text-[var(--ink)]">{profile.location}</span></span>}<span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted-ink)]">Building since / <span className="text-[var(--ink)]">{formatSince(profile.created_at)}</span></span>{profile.company && <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--muted-ink)]">At / <span className="text-[var(--ink)]">{profile.company.replace(/^@/, "")}</span></span>}</div>{showStats && <div className="mt-7 grid grid-cols-3 gap-4 sm:max-w-xl"><Stat label="Public repos" value={formatCount(profile.public_repos)} /><Stat label="Followers" value={formatCount(profile.followers)} /><Stat label="Stars found" value={formatCount(profile.stars)} /></div>}<div className="mt-8 flex flex-wrap items-center gap-2">{profile.languages.length > 0 ? profile.languages.map((language, index) => <span key={language} className="border border-[var(--line)] bg-black/10 px-2 py-1 font-mono text-[10px] text-[var(--body-ink)]" style={index === 0 ? { borderColor: cssAccent } : undefined}>{language}</span>) : <span className="font-mono text-[10px] text-[var(--muted-ink)]">Languages appear as repositories are made public.</span>}</div>{socialLinks.length > 0 && <div className="mt-5 flex flex-wrap gap-2">{socialLinks.map((social) => { const Icon = social.icon; return <a key={social.id} href={social.value} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 border border-[var(--line)] px-2 py-1 font-mono text-[10px] text-[var(--ink)] transition-colors hover:border-[var(--signal)] hover:text-[var(--signal)]"><Icon className="h-3 w-3" /> {social.label}<ExternalLink className="h-2.5 w-2.5" /></a>; })}</div>}</div></div></article> : <div className="grid min-h-[520px] place-items-center bg-[var(--card)] p-8 text-center"><div><Sparkles className="mx-auto h-7 w-7 text-[var(--signal)]" /><h2 className="mt-4 font-display text-3xl font-bold text-[var(--ink)]">Your card is waiting.</h2><p className="mt-2 max-w-sm text-sm leading-6 text-[var(--muted-ink)]">Bring in a public GitHub profile to turn its work into an editable calling card.</p></div></div>}</div>
 
             <div className="mt-9 grid gap-5 lg:grid-cols-[minmax(0,1fr)_300px]"><div className="border border-[var(--line)] bg-[var(--surface)] p-5 sm:p-6"><div className="flex items-center justify-between"><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--muted-ink)]">{manualProjects.length ? "Manually selected work" : "GitHub suggested work"}</p><span className="font-mono text-[10px] text-[var(--signal)]">{manualProjects.length ? "Your picks" : "from GitHub"}</span></div>{selectedWork.length ? <div className="mt-5 grid gap-3">{selectedWork.map((project, index) => <div key={project.id} className="group flex items-start gap-3 border-t border-[var(--line)] pt-3 first:border-t-0 first:pt-0"><span className="font-mono text-[10px] text-[var(--muted-ink)]">0{index + 1}</span><a href={project.url} target="_blank" rel="noreferrer" className="min-w-0 flex-1"><span className="flex items-center gap-2 font-display text-base font-bold text-[var(--ink)] group-hover:text-[var(--signal)]">{project.name}<ExternalLink className="h-3.5 w-3.5" /></span><span className="mt-1 block line-clamp-1 text-xs text-[var(--muted-ink)]">{project.description || "No project description provided."}</span></a><span className="font-mono text-[10px] text-[var(--muted-ink)]">{project.language || "—"}</span>{project.source === "manual" && <button onClick={() => removeManualProject(project.id)} aria-label={`Remove ${project.name}`} className="text-[var(--muted-ink)] hover:text-[var(--signal)]"><Trash2 className="h-3.5 w-3.5" /></button>}</div>)}</div> : <p className="mt-5 text-sm text-[var(--muted-ink)]">Add a personal project below to feature it here.</p>}</div><div className="flex flex-col justify-between border border-[var(--signal)]/35 bg-[var(--signal)]/[.07] p-5"><div><p className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--signal)]">Ready to leave the studio?</p><h3 className="mt-3 font-display text-2xl font-bold leading-tight text-[var(--ink)]">Your identity is ready for its next surface.</h3></div><div className="mt-6 grid gap-2"><Button onClick={copyShareLink} variant="outline" className="h-11 rounded-none border-[var(--line-strong)] bg-transparent font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink)] hover:bg-[var(--base)] hover:text-[var(--ink)]"><Copy className="mr-2 h-3.5 w-3.5" /> Copy share link</Button><Button onClick={() => void exportCard("png")} disabled={isExporting !== null} className="h-11 rounded-none bg-[var(--signal)] font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--base)] hover:brightness-110">{isExporting === "png" ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : <Download className="mr-2 h-3.5 w-3.5" />} Export PNG</Button><Button onClick={() => void exportCard("pdf")} disabled={isExporting !== null} variant="outline" className="h-11 rounded-none border-[var(--signal)]/70 bg-transparent font-mono text-[10px] uppercase tracking-[0.14em] text-[var(--ink)] hover:bg-[var(--signal)]/10 hover:text-[var(--ink)]">{isExporting === "pdf" ? <LoaderCircle className="mr-2 h-3.5 w-3.5 animate-spin" /> : <FileText className="mr-2 h-3.5 w-3.5" />} Export PDF</Button></div></div></div>
 
