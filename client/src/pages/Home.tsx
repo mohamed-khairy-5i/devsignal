@@ -332,6 +332,26 @@ export default function Home() {
         logging: false,
         removeContainer: true,
         onclone: (clonedDocument) => {
+          const exportRoot = clonedDocument.documentElement;
+          exportRoot.style.setProperty("--primary", "#d97845");
+          exportRoot.style.setProperty("--primary-foreground", "#111311");
+          exportRoot.style.setProperty("--secondary", "#1a1d1a");
+          exportRoot.style.setProperty("--secondary-foreground", "#f6f1e6");
+          exportRoot.style.setProperty("--muted", "#1a1d1a");
+          exportRoot.style.setProperty("--muted-foreground", "#8c958c");
+          exportRoot.style.setProperty("--accent", "#1a1d1a");
+          exportRoot.style.setProperty("--accent-foreground", "#f6f1e6");
+          exportRoot.style.setProperty("--destructive", "#c45252");
+          exportRoot.style.setProperty("--destructive-foreground", "#ffffff");
+          exportRoot.style.setProperty("--background", "#111311");
+          exportRoot.style.setProperty("--foreground", "#f6f1e6");
+          exportRoot.style.setProperty("--card", "#1a1d1a");
+          exportRoot.style.setProperty("--card-foreground", "#f6f1e6");
+          exportRoot.style.setProperty("--popover", "#1a1d1a");
+          exportRoot.style.setProperty("--popover-foreground", "#f6f1e6");
+          exportRoot.style.setProperty("--border", "rgba(246, 241, 230, 0.12)");
+          exportRoot.style.setProperty("--input", "rgba(246, 241, 230, 0.15)");
+          exportRoot.style.setProperty("--ring", "#d97845");
           clonedDocument.querySelectorAll("img").forEach((image) => {
             image.removeAttribute("crossorigin");
             image.removeAttribute("referrerpolicy");
