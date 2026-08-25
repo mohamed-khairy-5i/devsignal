@@ -30,7 +30,7 @@ pnpm install
 pnpm dev
 ```
 
-The local application runs with Vite. Use `pnpm run check` for type checking and `pnpm run build` for a production build.
+The local application runs with Vite. Use `pnpm run check` for type checking and `pnpm run build` for a production build. GitHub Actions runs both checks automatically for every pull request and push to `main`.
 
 ## Product principles
 

@@ -8,8 +8,12 @@
       content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>DevSignal — Developer identity builder</title>
     <meta name="description" content="Turn GitHub work into a recruiter-ready developer card." />
+    <meta name="application-name" content="DevSignal" />
+    <meta name="apple-mobile-web-app-title" content="DevSignal" />
+    <meta name="theme-color" content="#171b18" />
     <meta property="og:site_name" content="DevSignal" />
     <meta property="og:type" content="website" />
+    <meta property="og:locale" content="en_US" />
     <meta property="og:url" content="https://devsignal.netlify.app/" />
     <meta property="og:title" content="DevSignal — Turn GitHub work into a recruiter-ready developer card" />
     <meta property="og:description" content="Choose your best GitHub projects, add your professional links, and export a polished developer card for recruiters and clients." />
@@ -20,7 +24,9 @@
     <meta name="twitter:title" content="DevSignal — Turn GitHub work into a recruiter-ready developer card" />
     <meta name="twitter:description" content="Choose your best GitHub projects, add your professional links, and export a polished developer card." />
     <meta name="twitter:image" content="https://devsignal.netlify.app/devsignal-og.png" />
-    <link rel="icon" type="image/png" href="/manus-storage/devsignal-favicon_bc3f8d22.png" />
+    <link rel="icon" type="image/png" href="/devsignal-icon.png" />
+    <link rel="apple-touch-icon" href="/devsignal-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -29,10 +35,6 @@
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
-    <script
-      defer
-      src="%VITE_ANALYTICS_ENDPOINT%/umami"
-      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
   </body>
 
 </html>

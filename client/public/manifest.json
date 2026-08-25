@@ -1,0 +1,17 @@
+{
+  "name": "DevSignal",
+  "short_name": "DevSignal",
+  "description": "Turn GitHub work into a recruiter-ready developer card.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#171b18",
+  "theme_color": "#171b18",
+  "icons": [
+    {
+      "src": "/devsignal-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

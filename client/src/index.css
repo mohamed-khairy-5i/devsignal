@@ -95,7 +95,7 @@
   bottom:28px;
   width:44px;
   height:44px;
-  background:url('/manus-storage/devsignal-favicon_bc3f8d22.png') center/32px no-repeat #1c221d;
+  background:url('/devsignal-icon.png') center/32px no-repeat #1c221d;
   border:1px solid var(--signal);
   box-shadow:5px 5px 0 var(--signal);
   opacity:.95;
