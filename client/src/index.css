@@ -1,0 +1,110 @@
+/** Atelier Terminal global style: ink workbench, paper mode, copper signal. See /ideas.md. */
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+}
+
+:root,
+.dark {
+  --primary: oklch(0.68 0.12 48); --primary-foreground: oklch(0.16 0.01 145);
+  --secondary: oklch(0.24 0.01 145); --secondary-foreground: oklch(0.86 0.015 145);
+  --muted: oklch(0.24 0.01 145); --muted-foreground: oklch(0.68 0.02 145);
+  --accent: oklch(0.24 0.01 145); --accent-foreground: oklch(0.95 0.014 88);
+  --destructive: oklch(0.64 0.2 25); --destructive-foreground: oklch(0.98 0 0);
+  --radius: 0rem; --background: oklch(0.16 0.01 145); --foreground: oklch(0.95 0.014 88);
+  --card: oklch(0.2 0.01 145); --card-foreground: oklch(0.95 0.014 88);
+  --popover: oklch(0.2 0.01 145); --popover-foreground: oklch(0.95 0.014 88);
+  --border: oklch(0.95 0.014 88 / 12%); --input: oklch(0.95 0.014 88 / 15%); --ring: oklch(0.68 0.12 48);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html { scroll-behavior: smooth; }
+  body { @apply bg-background text-foreground; font-family: "Manrope", sans-serif; }
+  button:not(:disabled), [role="button"]:not([aria-disabled="true"]), [type="button"]:not(:disabled), [type="submit"]:not(:disabled), [type="reset"]:not(:disabled), a[href], select:not(:disabled), input[type="checkbox"]:not(:disabled), input[type="radio"]:not(:disabled) { @apply cursor-pointer; }
+}
+
+@layer utilities {
+  .font-display { font-family: "Manrope", sans-serif; }
+  .font-mono { font-family: "DM Mono", monospace; }
+  .studio-shell { --base:#111311; --surface:#171a17; --card:#1a1d1a; --ink:#f6f1e6; --body-ink:#c1c9c0; --muted-ink:#8c958c; --line:rgba(246,241,230,.11); --line-strong:rgba(246,241,230,.22); --grid:rgba(255,255,255,.024); --signal:#d97845; color:var(--ink); background:var(--base); background-image:radial-gradient(circle at 85% 15%, rgba(217,120,69,.09), transparent 28%),radial-gradient(circle at 5% 85%, rgba(147,224,189,.04), transparent 24%); }
+  .studio-shell--light { --base:#eee9de; --surface:#f8f4eb; --card:#f0eadf; --ink:#1c221d; --body-ink:#485149; --muted-ink:#667166; --line:rgba(28,34,29,.14); --line-strong:rgba(28,34,29,.27); --grid:rgba(28,34,29,.05); background-image:radial-gradient(circle at 85% 15%, rgba(217,120,69,.13), transparent 28%),radial-gradient(circle at 5% 85%, rgba(73,130,95,.08), transparent 24%); }
+  .studio-shell--light .mix-blend-screen { mix-blend-mode:multiply; opacity:.10; }
+  .studio-shell--light .bg-black\/10 { background:rgba(28,34,29,.05); }
+  .studio-shell--light .profile-card--terminal { --card:#1b1f1b; --ink:#f6f1e6; --body-ink:#d4d9d1; --muted-ink:#a5aea4; --line:rgba(246,241,230,.14); --line-strong:rgba(246,241,230,.25); }
+  .profile-card--paper { --card:#eae1ce; --ink:#1c221d; --body-ink:#40483f; --muted-ink:#667166; --line:rgba(28,34,29,.14); --line-strong:rgba(28,34,29,.25); }
+  .profile-card--paper .mix-blend-screen { mix-blend-mode:multiply; opacity:.12; }
+  .toggle-track { display:flex; align-items:center; width:48px; height:26px; padding:3px; background:var(--line-strong); border:1px solid var(--line-strong); transition:background 180ms cubic-bezier(.23,1,.32,1),border-color 180ms cubic-bezier(.23,1,.32,1); }
+  .toggle-track--on { justify-content:flex-end; background:var(--signal); border-color:var(--signal); }
+  .toggle-thumb { display:grid; place-items:center; width:18px; height:18px; color:var(--base); background:var(--ink); transition:transform 180ms cubic-bezier(.23,1,.32,1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .profile-card { animation:card-in 260ms cubic-bezier(.23,1,.32,1); }
+  .loading-scan { animation:loading-scan 1.05s ease-in-out infinite; }
+  .theme-toggle { transition:transform 160ms cubic-bezier(.23,1,.32,1),border-color 160ms cubic-bezier(.23,1,.32,1); }
+  .theme-toggle:active { transform:scale(.97); }
+}
+
+@keyframes card-in { from { opacity:.55; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+@keyframes loading-scan { 0% { transform:translateX(-100%); opacity:0; } 35%,65% { opacity:1; } 100% { transform:translateX(100%); opacity:0; } }
+
+/* Editorial material pass: the finished card is an ivory printed artifact, not a dark dashboard panel. */
+.profile-card--editorial {
+  --card:#e9e0cf;
+  --ink:#1c221d;
+  --body-ink:#485149;
+  --muted-ink:#667166;
+  --line:rgba(28,34,29,.16);
+  --line-strong:rgba(28,34,29,.30);
+  box-shadow:inset 0 0 0 10px rgba(255,255,255,.24), 14px 14px 0 rgba(217,120,69,.16);
+}
+
+.profile-card--editorial .mix-blend-screen { mix-blend-mode:multiply; opacity:.17; }
+
+.profile-card--editorial::after {
+  content:"";
+  position:absolute;
+  right:30px;
+  bottom:28px;
+  width:44px;
+  height:44px;
+  background:url('/manus-storage/devsignal-favicon_bc3f8d22.png') center/32px no-repeat #1c221d;
+  border:1px solid var(--signal);
+  box-shadow:5px 5px 0 var(--signal);
+  opacity:.95;
+}
+
+.profile-card--editorial > div:last-child { z-index:1; }
+
+@media (min-width:1024px) {
+  .studio-shell > main > section > section > section > .mt-5 {
+    grid-template-columns:1.28fr .72fr;
+  }
+}
