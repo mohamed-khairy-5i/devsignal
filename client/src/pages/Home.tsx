@@ -4,7 +4,7 @@
  * See /ideas.md for the chosen design philosophy.
  */
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import html2canvas from "html2canvas";
+import { toBlob } from "html-to-image";
 import { jsPDF } from "jspdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,9 +109,7 @@ function rejectAfter(milliseconds: number, message: string) {
   return new Promise<never>((_, reject) => window.setTimeout(() => reject(new Error(message)), milliseconds));
 }
 
-async function downloadCanvas(canvas: HTMLCanvasElement, fileName: string) {
-  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 1));
-  if (!blob) throw new Error("The card image could not be prepared for download.");
+async function downloadBlob(blob: Blob, fileName: string) {
   const objectUrl = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = objectUrl;
@@ -122,14 +120,11 @@ async function downloadCanvas(canvas: HTMLCanvasElement, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
-async function imageAsDataUrl(source: string) {
-  const response = await fetch(source, { mode: "cors", credentials: "omit" });
-  if (!response.ok) throw new Error("The profile image could not be prepared for export.");
-  const blob = await response.blob();
+async function blobAsDataUrl(blob: Blob) {
   return new Promise<string>((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("The profile image could not be prepared for export."));
-    reader.onerror = () => reject(new Error("The profile image could not be prepared for export."));
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("The card image could not be prepared for export."));
+    reader.onerror = () => reject(new Error("The card image could not be prepared for export."));
     reader.readAsDataURL(blob);
   });
 }
@@ -308,62 +303,56 @@ export default function Home() {
     }
   }
 
-  async function buildCanvas() {
+  async function buildExportImage() {
     if (!cardRef.current) throw new Error("Load a profile before exporting the card.");
     const target = cardRef.current;
     const bounds = target.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) throw new Error("The card is not ready to export yet. Try again in a moment.");
-    const avatar = target.querySelector<HTMLImageElement>("img");
-    let exportAvatar = "";
-    if (avatar?.currentSrc) {
-      try {
-        exportAvatar = await Promise.race([imageAsDataUrl(avatar.currentSrc), rejectAfter(5000, "The profile image took too long to prepare.")]);
-      } catch {
-        exportAvatar = "/devsignal-icon.png";
-      }
+    const width = Math.round(bounds.width * 2);
+    const height = Math.round(bounds.height * 2);
+    const exportVariables = ["--card", "--ink", "--body-ink", "--muted-ink", "--line", "--line-strong", "--signal"];
+    const originalVariables = new Map(exportVariables.map((property) => [property, target.style.getPropertyValue(property)]));
+    const computedStyle = window.getComputedStyle(target);
+    exportVariables.forEach((property) => target.style.setProperty(property, computedStyle.getPropertyValue(property).trim()));
+    const paintProperties = ["color", "background-color", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "outline-color", "fill", "stroke"];
+    const exportNodes = [target, ...Array.from(target.querySelectorAll<HTMLElement>("*"))];
+    const originalPaintStyles = new Map(exportNodes.map((element) => [
+      element,
+      new Map(paintProperties.map((property) => [property, {
+        value: element.style.getPropertyValue(property),
+        priority: element.style.getPropertyPriority(property),
+      }])),
+    ]));
+    exportNodes.forEach((element) => {
+      const computed = window.getComputedStyle(element);
+      paintProperties.forEach((property) => element.style.setProperty(property, computed.getPropertyValue(property), "important"));
+    });
+
+    try {
+      const blob = await Promise.race([
+        toBlob(target, {
+          backgroundColor: computedStyle.backgroundColor,
+          pixelRatio: 2,
+          cacheBust: true,
+          canvasWidth: width,
+          canvasHeight: height,
+        }),
+        rejectAfter(20000, "Export timed out while preparing the card. Try again after the profile images finish loading."),
+      ]);
+      if (!blob) throw new Error("The card image could not be prepared for export.");
+      return { blob, width, height };
+    } finally {
+      originalVariables.forEach((value, property) => {
+        if (value) target.style.setProperty(property, value);
+        else target.style.removeProperty(property);
+      });
+      originalPaintStyles.forEach((styles, element) => {
+        styles.forEach(({ value, priority }, property) => {
+          if (value) element.style.setProperty(property, value, priority);
+          else element.style.removeProperty(property);
+        });
+      });
     }
-    return Promise.race([
-      html2canvas(target, {
-        backgroundColor: theme === "dark" ? "#1a1d1a" : "#f1eadc",
-        scale: 2,
-        useCORS: true,
-        allowTaint: false,
-        imageTimeout: 10000,
-        logging: false,
-        removeContainer: true,
-        onclone: (clonedDocument) => {
-          const exportRoot = clonedDocument.documentElement;
-          exportRoot.style.setProperty("--primary", "#d97845");
-          exportRoot.style.setProperty("--primary-foreground", "#111311");
-          exportRoot.style.setProperty("--secondary", "#1a1d1a");
-          exportRoot.style.setProperty("--secondary-foreground", "#f6f1e6");
-          exportRoot.style.setProperty("--muted", "#1a1d1a");
-          exportRoot.style.setProperty("--muted-foreground", "#8c958c");
-          exportRoot.style.setProperty("--accent", "#1a1d1a");
-          exportRoot.style.setProperty("--accent-foreground", "#f6f1e6");
-          exportRoot.style.setProperty("--destructive", "#c45252");
-          exportRoot.style.setProperty("--destructive-foreground", "#ffffff");
-          exportRoot.style.setProperty("--background", "#111311");
-          exportRoot.style.setProperty("--foreground", "#f6f1e6");
-          exportRoot.style.setProperty("--card", "#1a1d1a");
-          exportRoot.style.setProperty("--card-foreground", "#f6f1e6");
-          exportRoot.style.setProperty("--popover", "#1a1d1a");
-          exportRoot.style.setProperty("--popover-foreground", "#f6f1e6");
-          exportRoot.style.setProperty("--border", "rgba(246, 241, 230, 0.12)");
-          exportRoot.style.setProperty("--input", "rgba(246, 241, 230, 0.15)");
-          exportRoot.style.setProperty("--ring", "#d97845");
-          clonedDocument.querySelectorAll("img").forEach((image) => {
-            image.removeAttribute("crossorigin");
-            image.removeAttribute("referrerpolicy");
-            if (exportAvatar) image.src = exportAvatar;
-          });
-          clonedDocument.querySelectorAll<HTMLElement>("[style]").forEach((element) => {
-            if (element.style.backgroundImage.includes("color-mix")) element.style.backgroundImage = "none";
-          });
-        },
-      }),
-      rejectAfter(15000, "Export timed out while preparing the card. Try again after the profile images finish loading."),
-    ]);
   }
 
   async function exportCard(format: "png" | "pdf") {
@@ -373,13 +362,13 @@ export default function Home() {
     }
     setIsExporting(format);
     try {
-      const canvas = await buildCanvas();
+      const image = await buildExportImage();
       const fileName = `${profile.login}-devcard`;
       if (format === "png") {
-        await downloadCanvas(canvas, `${fileName}.png`);
+        await downloadBlob(image.blob, `${fileName}.png`);
       } else {
-        const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [canvas.width, canvas.height], compress: true });
-        pdf.addImage(canvas.toDataURL("image/png", 0.95), "PNG", 0, 0, canvas.width, canvas.height, undefined, "FAST");
+        const pdf = new jsPDF({ orientation: "landscape", unit: "px", format: [image.width, image.height], compress: true });
+        pdf.addImage(await blobAsDataUrl(image.blob), "PNG", 0, 0, image.width, image.height, undefined, "FAST");
         pdf.save(`${fileName}.pdf`);
       }
       toast.success(`${format.toUpperCase()} card prepared for download.`);
