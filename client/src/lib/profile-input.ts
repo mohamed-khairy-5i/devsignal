@@ -1,7 +1,15 @@
 export function extractHandle(value: string) {
   const trimmed = value.trim().replace(/^@/, "");
-  const githubUrl = trimmed.match(/^(?:https?:\/\/)?(?:www\.)?github\.com\/([^/?#]+)/i);
-  return (githubUrl?.[1] ?? trimmed).replace(/\/$/, "");
+  const normalizedUrl = /^(?:https?:\/\/)?(?:www\.)?github\.com\//i.test(trimmed)
+    ? (trimmed.startsWith("http") ? trimmed : `https://${trimmed}`)
+    : "";
+  if (!normalizedUrl) return trimmed.replace(/\/$/, "");
+  try {
+    const pathSegments = new URL(normalizedUrl).pathname.split("/").filter(Boolean);
+    return pathSegments.length === 1 ? pathSegments[0] : "";
+  } catch {
+    return "";
+  }
 }
 
 export function isValidGitHubHandle(value: string) {

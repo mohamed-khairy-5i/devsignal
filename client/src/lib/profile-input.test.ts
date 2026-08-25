@@ -10,6 +10,10 @@ describe("GitHub profile input", () => {
     expect(extractHandle("https://github.com/vercel?tab=repositories")).toBe("vercel");
   });
 
+  it("rejects a repository URL instead of silently loading its owner profile", () => {
+    expect(extractHandle("https://github.com/vercel/next.js")).toBe("");
+  });
+
   it("accepts valid GitHub handles and rejects malformed input", () => {
     expect(isValidGitHubHandle("vercel")).toBe(true);
     expect(isValidGitHubHandle("mohamed-khairy-5i")).toBe(true);
