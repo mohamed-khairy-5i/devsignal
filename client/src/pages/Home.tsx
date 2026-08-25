@@ -122,6 +122,18 @@ async function downloadCanvas(canvas: HTMLCanvasElement, fileName: string) {
   window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
 }
 
+async function imageAsDataUrl(source: string) {
+  const response = await fetch(source, { mode: "cors", credentials: "omit" });
+  if (!response.ok) throw new Error("The profile image could not be prepared for export.");
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => typeof reader.result === "string" ? resolve(reader.result) : reject(new Error("The profile image could not be prepared for export."));
+    reader.onerror = () => reject(new Error("The profile image could not be prepared for export."));
+    reader.readAsDataURL(blob);
+  });
+}
+
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <div className="border-l border-[var(--line)] pl-4 first:border-l-0 first:pl-0">
@@ -301,6 +313,15 @@ export default function Home() {
     const target = cardRef.current;
     const bounds = target.getBoundingClientRect();
     if (bounds.width <= 0 || bounds.height <= 0) throw new Error("The card is not ready to export yet. Try again in a moment.");
+    const avatar = target.querySelector<HTMLImageElement>("img");
+    let exportAvatar = "";
+    if (avatar?.currentSrc) {
+      try {
+        exportAvatar = await Promise.race([imageAsDataUrl(avatar.currentSrc), rejectAfter(5000, "The profile image took too long to prepare.")]);
+      } catch {
+        exportAvatar = "/devsignal-icon.png";
+      }
+    }
     return Promise.race([
       html2canvas(target, {
         backgroundColor: theme === "dark" ? "#1a1d1a" : "#f1eadc",
@@ -310,6 +331,16 @@ export default function Home() {
         imageTimeout: 10000,
         logging: false,
         removeContainer: true,
+        onclone: (clonedDocument) => {
+          clonedDocument.querySelectorAll("img").forEach((image) => {
+            image.removeAttribute("crossorigin");
+            image.removeAttribute("referrerpolicy");
+            if (exportAvatar) image.src = exportAvatar;
+          });
+          clonedDocument.querySelectorAll<HTMLElement>("[style]").forEach((element) => {
+            if (element.style.backgroundImage.includes("color-mix")) element.style.backgroundImage = "none";
+          });
+        },
       }),
       rejectAfter(15000, "Export timed out while preparing the card. Try again after the profile images finish loading."),
     ]);
